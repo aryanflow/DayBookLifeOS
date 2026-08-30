@@ -254,7 +254,12 @@ function QuickSpend({ setSpends, today, ping, spendTotalToday, budget, currencyS
       ping("Enter an amount first");
       return;
     }
-    setSpends((p) => [...p, { id: Date.now(), date: today, amount: v, cat, note: note.trim() }]);
+    const trimmed = note.trim();
+    if (!trimmed) {
+      ping("Add a note - what was it?");
+      return;
+    }
+    setSpends((p) => [...p, { id: Date.now(), date: today, amount: v, cat, note: trimmed }]);
     setAmt("");
     setNote("");
     ping(`${sym}${v} logged`);
@@ -276,7 +281,7 @@ function QuickSpend({ setSpends, today, ping, spendTotalToday, budget, currencyS
         Quick spend
       </SectionTitle>
       <div className="spend-input-row">
-        <label className="field-label" style={{ ...fontBody, color: T.inkSoft }}>
+        <label className="field-label spend-amount-field" style={{ ...fontBody, color: T.inkSoft }}>
           Amount
           <input
             inputMode="decimal"
@@ -285,16 +290,19 @@ function QuickSpend({ setSpends, today, ping, spendTotalToday, budget, currencyS
             onChange={(e) => setAmt(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && add()}
             className="field-input field-input--amount"
+            aria-label="Spend amount"
           />
         </label>
-        <label className="field-label field-label--grow" style={{ ...fontBody, color: T.inkSoft }}>
-          Note <span className="field-optional">(optional)</span>
+        <label className="field-label field-label--grow spend-note-field" style={{ ...fontBody, color: T.inkSoft }}>
+          Note
           <input
             placeholder="What was it?"
             value={note}
             onChange={(e) => setNote(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && add()}
             className="field-input"
+            aria-label="Spend note"
+            aria-required="true"
           />
         </label>
       </div>

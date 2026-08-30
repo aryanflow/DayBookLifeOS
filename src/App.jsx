@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useTheme, ThemeProvider } from "./theme/ThemeContext";
 import { useDaybookStore } from "./hooks/useDaybookStore";
 import { useToast } from "./hooks/useToast";
+import { useSync } from "./hooks/useSync";
 import { useHabitStreak, useToggleHabit } from "./hooks/useHabits";
 import { WelcomeScreen } from "./components/auth/WelcomeScreen";
 import { UserSelectScreen } from "./components/auth/UserSelectScreen";
@@ -28,6 +29,7 @@ import "./styles/global.css";
 
 function DaybookApp({ store }) {
   const { toast, ping, dismiss } = useToast();
+  const sync = useSync({ app: store.app, importApp: store.importApp });
   const [tab, setTab] = useState("today");
   const [showSettings, setShowSettings] = useState(false);
   const [viewDate, setViewDate] = useState(dkey());
@@ -200,6 +202,8 @@ function DaybookApp({ store }) {
         profileName={profile.name}
         onLock={logout}
         onSettings={() => setShowSettings(true)}
+        syncEnabled={sync.enabled}
+        syncStatus={sync.status}
       />
 
       <div
@@ -324,6 +328,7 @@ function DaybookApp({ store }) {
           onClose={() => setShowSettings(false)}
           ping={ping}
           renameUser={renameUser}
+          sync={sync}
         />
       )}
 

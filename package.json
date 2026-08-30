@@ -8,7 +8,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "icons": "node scripts/generate-icons.mjs"
+    "icons": "node scripts/generate-icons.mjs",
+    "sync:install": "npm install --prefix worker",
+    "sync:dev": "npm run dev --prefix worker",
+    "sync:deploy": "npm run deploy --prefix worker"
   },
   "dependencies": {
     "react": "^18.3.1",

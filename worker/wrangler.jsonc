@@ -1,0 +1,12 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "daybook-sync",
+  "main": "src/index.js",
+  "compatibility_date": "2025-08-30",
+  "kv_namespaces": [
+    {
+      "binding": "SYNC_KV",
+      "id": "REPLACE_WITH_KV_NAMESPACE_ID"
+    }
+  ]
+}

@@ -2,6 +2,7 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { VitePWA } from "vite-plugin-pwa";
 import { readFileSync, existsSync } from "fs";
+import { syncDevPlugin } from "./vite.sync-dev.js";
 
 function faviconPlugin() {
   return {
@@ -23,6 +24,7 @@ function faviconPlugin() {
 export default defineConfig({
   plugins: [
     react(),
+    syncDevPlugin(),
     faviconPlugin(),
     VitePWA({
       registerType: "autoUpdate",

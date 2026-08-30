@@ -99,6 +99,29 @@ export const Zap = (p) => <Icon {...p} d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />;
 export const LogOut = (p) => (
   <Icon {...p} d={["M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4", "M16 17l5-5-5-5", "M21 12H9"]} />
 );
+export const Cloud = (p) => (
+  <Icon {...p} d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z" />
+);
+export const RefreshCw = (p) => (
+  <Icon
+    {...p}
+    d={[
+      "M21 2v6h-6",
+      "M3 12a9 9 0 0 1 15-6.7L21 8",
+      "M3 22v-6h6",
+      "M21 12a9 9 0 0 1-15 6.7L3 16",
+    ]}
+  />
+);
+export const Copy = (p) => (
+  <Icon
+    {...p}
+    d={[
+      "M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2",
+    ]}
+    extra={<rect x="8" y="2" width="8" height="4" rx="1" />}
+  />
+);
 
 const TAB_ICONS = {
   today: Sun,

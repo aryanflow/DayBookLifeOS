@@ -1,0 +1,13 @@
+{
+  "name": "daybook-sync-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "kv:create": "wrangler kv namespace create SYNC_KV"
+  },
+  "devDependencies": {
+    "wrangler": "^4.33.0"
+  }
+}

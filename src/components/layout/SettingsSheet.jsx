@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Sun, Moon, Lock, Download, Upload, LogOut } from "../icons";
+import { X, Sun, Moon, Lock, Download, Upload, LogOut, Cloud, RefreshCw, Copy } from "../icons";
 import { hashPin, verifyPin, validatePin } from "../../lib/auth";
 import { CURRENCIES, currencySymbol } from "../../constants";
 import { useTheme } from "../../theme/ThemeContext";
@@ -26,6 +26,7 @@ export function SettingsSheet({
   onClose,
   ping,
   renameUser,
+  sync,
 }) {
   const { T } = useTheme();
   const sym = currencySymbol(currency);
@@ -37,6 +38,9 @@ export function SettingsSheet({
   const [pinNew2, setPinNew2] = useState("");
   const [pinErr, setPinErr] = useState("");
   const [pinBusy, setPinBusy] = useState(false);
+  const [linkCode, setLinkCode] = useState("");
+  const [showSyncKey, setShowSyncKey] = useState(false);
+  const [syncBusy, setSyncBusy] = useState(false);
 
   useEffect(() => {
     const onKey = (e) => e.key === "Escape" && onClose();
@@ -115,7 +119,7 @@ export function SettingsSheet({
     }
   };
 
-  const field = { className: "field-input" };
+  const fieldClass = "field-input";
   const rowBtn = {
     ...fontHead,
     display: "flex",
@@ -145,6 +149,79 @@ export function SettingsSheet({
       onClose();
       ping(`${removed.user.name} removed`, () => onRestoreUser(removed));
     }
+  };
+
+  const syncStatusLabel = () => {
+    if (!sync?.enabled) return "Optional - encrypted backup across your devices.";
+    if (sync.status === "syncing") return "Syncing now…";
+    if (sync.status === "offline") return "Offline - will sync when you're back online.";
+    if (sync.status === "error") return sync.lastError || "Sync failed - tap Sync now to retry.";
+    if (sync.config?.lastSyncedAt) {
+      const t = new Date(sync.config.lastSyncedAt);
+      return `Auto-sync on · Last saved ${t.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}`;
+    }
+    return "Auto-sync on · waiting for first upload.";
+  };
+
+  const handleEnableSync = async () => {
+    setSyncBusy(true);
+    try {
+      const result = await sync.enableSync();
+      if (!result.ok) {
+        ping(result.reason || "Could not turn on sync");
+        return;
+      }
+      setShowSyncKey(true);
+      ping("Sync is on - copy your code to other devices");
+    } finally {
+      setSyncBusy(false);
+    }
+  };
+
+  const handleLinkSync = async () => {
+    setSyncBusy(true);
+    try {
+      const result = await sync.linkDevice(linkCode);
+      if (!result.ok) {
+        ping(result.reason || "Could not link device");
+        return;
+      }
+      setLinkCode("");
+      ping("Linked - pulled latest from cloud");
+    } finally {
+      setSyncBusy(false);
+    }
+  };
+
+  const handleSyncNow = async () => {
+    setSyncBusy(true);
+    try {
+      const result = await sync.syncNow();
+      if (!result.ok) {
+        ping(result.reason || sync.lastError || "Sync failed");
+        return;
+      }
+      if (result.pulled) ping("Updated from cloud");
+      else ping("Saved to cloud");
+    } finally {
+      setSyncBusy(false);
+    }
+  };
+
+  const copySyncKey = async () => {
+    if (!sync?.syncKeyFormatted) return;
+    try {
+      await navigator.clipboard.writeText(sync.syncKeyFormatted);
+      ping("Sync code copied");
+    } catch {
+      ping("Could not copy - select and copy the code manually");
+    }
+  };
+
+  const handleDisableSync = () => {
+    sync?.disableSync();
+    setShowSyncKey(false);
+    ping("Sync turned off on this device");
   };
 
   return (
@@ -181,7 +258,7 @@ export function SettingsSheet({
 
         <div className="settings-stack">
           <SettingsBlock label="Profile">
-            <input value={name} onChange={(e) => setName(e.target.value)} onBlur={saveName} onKeyDown={(e) => e.key === "Enter" && e.target.blur()} aria-label="Your name" style={field} />
+            <input className={fieldClass} value={name} onChange={(e) => setName(e.target.value)} onBlur={saveName} onKeyDown={(e) => e.key === "Enter" && e.target.blur()} aria-label="Your name" />
             <div style={{ fontSize: 12, color: T.inkSoft, fontWeight: 600, marginTop: 6 }}>
               Daybook since {profile.createdAt} - {users.length} {users.length === 1 ? "person" : "people"} on this device
             </div>
@@ -201,7 +278,8 @@ export function SettingsSheet({
                 ping("Currency updated");
               }}
               aria-label="Currency"
-              style={{ ...field, cursor: "pointer" }}
+              className={fieldClass}
+              style={{ cursor: "pointer" }}
             >
               {CURRENCIES.map((c) => (
                 <option key={c.code} value={c.code}>
@@ -212,7 +290,67 @@ export function SettingsSheet({
           </SettingsBlock>
 
           <SettingsBlock label={`Daily budget (${sym})`}>
-            <input value={bud} inputMode="numeric" onChange={(e) => setBud(e.target.value.replace(/\D/g, ""))} onBlur={saveBudget} onKeyDown={(e) => e.key === "Enter" && e.target.blur()} aria-label="Daily budget" style={field} />
+            <input className={fieldClass} value={bud} inputMode="numeric" onChange={(e) => setBud(e.target.value.replace(/\D/g, ""))} onBlur={saveBudget} onKeyDown={(e) => e.key === "Enter" && e.target.blur()} aria-label="Daily budget" />
+          </SettingsBlock>
+
+          <SettingsBlock label="Sync across devices">
+            {!sync?.enabled ? (
+              <div style={{ display: "grid", gap: 8 }}>
+                <p style={{ fontSize: 13, color: T.inkSoft, fontWeight: 600, lineHeight: 1.5, margin: 0 }}>
+                  One tap turns on auto-sync. Your data encrypts and uploads every few seconds - no manual saves.
+                </p>
+                <button type="button" onClick={handleEnableSync} disabled={syncBusy} style={{ ...rowBtn, opacity: syncBusy ? 0.7 : 1 }}>
+                  <Cloud size={14} /> Turn on sync on this device
+                </button>
+                <div style={{ fontSize: 12, color: T.inkSoft, fontWeight: 600, textAlign: "center" }}>Already syncing elsewhere?</div>
+                <input
+                  value={linkCode}
+                  onChange={(e) => setLinkCode(e.target.value.toUpperCase())}
+                  placeholder="Paste sync code (XXXX-XXXX-…)"
+                  aria-label="Sync code from another device"
+                  className={fieldClass}
+                  autoComplete="off"
+                  spellCheck={false}
+                />
+                <button type="button" onClick={handleLinkSync} disabled={syncBusy || !linkCode.trim()} style={{ ...rowBtn, opacity: syncBusy || !linkCode.trim() ? 0.7 : 1 }}>
+                  Link this device
+                </button>
+                <div style={{ fontSize: 12, color: T.inkSoft, fontWeight: 600, lineHeight: 1.5 }}>{syncStatusLabel()}</div>
+              </div>
+            ) : (
+              <div style={{ display: "grid", gap: 10 }}>
+                <div
+                  className={`sync-status sync-status--${sync.status === "synced" || sync.status === "idle" ? "ok" : sync.status}`}
+                  style={{ color: sync.status === "error" ? T.food : T.inkSoft }}
+                >
+                  <span className="sync-status-dot" aria-hidden="true" />
+                  <span>{syncStatusLabel()}</span>
+                </div>
+                <p style={{ fontSize: 12, color: T.inkSoft, fontWeight: 600, lineHeight: 1.5, margin: 0 }}>
+                  Edits upload automatically within a few seconds. Use Sync now to force it, or link the same code on another device.
+                </p>
+                <div className="sync-code-box">
+                  <code className="sync-code-text">{showSyncKey ? sync.syncKeyFormatted : "••••-••••-••••-••••-••••-••••"}</code>
+                  <button
+                    type="button"
+                    className="sync-code-toggle"
+                    onClick={() => setShowSyncKey((v) => !v)}
+                    style={{ color: T.accent, background: "none", border: "none", cursor: "pointer", fontWeight: 700, fontSize: 13 }}
+                  >
+                    {showSyncKey ? "Hide" : "Show"}
+                  </button>
+                </div>
+                <button type="button" onClick={copySyncKey} style={rowBtn}><Copy size={14} /> Copy sync code</button>
+                <button type="button" onClick={handleSyncNow} disabled={syncBusy} style={rowBtn}><RefreshCw size={14} /> Sync now</button>
+                <button
+                  type="button"
+                  onClick={handleDisableSync}
+                  style={{ background: "none", border: "none", color: T.inkSoft, cursor: "pointer", fontWeight: 700, fontSize: 13, padding: "4px 0", textAlign: "center" }}
+                >
+                  Turn off sync on this device
+                </button>
+              </div>
+            )}
           </SettingsBlock>
 
           <SettingsBlock label="PIN lock">
@@ -230,12 +368,12 @@ export function SettingsSheet({
             ) : (
               <div style={{ display: "grid", gap: 8 }}>
                 {(pinMode === "change" || pinMode === "remove") && (
-                  <input placeholder="Current PIN" inputMode="numeric" type="password" maxLength={4} value={pinOld} onChange={(e) => { setPinOld(e.target.value.replace(/\D/g, "")); setPinErr(""); }} style={field} />
+                  <input className={fieldClass} placeholder="Current PIN" inputMode="numeric" type="password" maxLength={4} value={pinOld} onChange={(e) => { setPinOld(e.target.value.replace(/\D/g, "")); setPinErr(""); }} />
                 )}
                 {pinMode !== "remove" && (
                   <>
-                    <input placeholder="New 4-digit PIN" inputMode="numeric" type="password" maxLength={4} value={pinNew} onChange={(e) => { setPinNew(e.target.value.replace(/\D/g, "")); setPinErr(""); }} style={field} />
-                    <input placeholder="Repeat new PIN" inputMode="numeric" type="password" maxLength={4} value={pinNew2} onChange={(e) => { setPinNew2(e.target.value.replace(/\D/g, "")); setPinErr(""); }} style={field} />
+                    <input className={fieldClass} placeholder="New 4-digit PIN" inputMode="numeric" type="password" maxLength={4} value={pinNew} onChange={(e) => { setPinNew(e.target.value.replace(/\D/g, "")); setPinErr(""); }} />
+                    <input className={fieldClass} placeholder="Repeat new PIN" inputMode="numeric" type="password" maxLength={4} value={pinNew2} onChange={(e) => { setPinNew2(e.target.value.replace(/\D/g, "")); setPinErr(""); }} />
                   </>
                 )}
                 {pinErr && <div style={{ color: T.food, fontSize: 13, fontWeight: 700 }}>{pinErr}</div>}
@@ -260,7 +398,11 @@ export function SettingsSheet({
                 <Upload size={14} /> Restore from backup
                 <input type="file" accept=".json" style={{ display: "none" }} onChange={(e) => e.target.files[0] && importData(e.target.files[0])} />
               </label>
-              <div style={{ fontSize: 12, color: T.inkSoft, fontWeight: 600, textAlign: "center" }}>Everything lives on this device. Nothing is uploaded.</div>
+              <div style={{ fontSize: 12, color: T.inkSoft, fontWeight: 600, textAlign: "center" }}>
+                {sync?.enabled
+                  ? "Local-first with optional encrypted cloud sync. JSON backup still works offline."
+                  : "Everything stays on this device unless you turn on sync."}
+              </div>
             </div>
           </SettingsBlock>
 

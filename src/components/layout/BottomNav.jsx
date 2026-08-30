@@ -1,5 +1,5 @@
 import { TABS } from "../../constants";
-import { TabIcon, Lock, Gear } from "../icons";
+import { TabIcon, Lock, Gear, Cloud } from "../icons";
 import { useTheme } from "../../theme/ThemeContext";
 import { fontHead } from "../../theme/colors";
 import { DaybookLogo } from "../ui/DaybookLogo";
@@ -34,8 +34,9 @@ function NavButton({ id, label, active, onClick, layout }) {
   );
 }
 
-export function SideNav({ tab, setTab, profileName, onLock, onSettings }) {
+export function SideNav({ tab, setTab, profileName, onLock, onSettings, syncEnabled, syncStatus }) {
   const first = profileName?.split(" ")[0] || "";
+  const syncLabel = syncStatus === "syncing" ? "Syncing…" : syncEnabled ? "Auto-sync on" : "Turn on sync";
 
   return (
     <aside className="side-nav" aria-label="Sections">
@@ -54,14 +55,25 @@ export function SideNav({ tab, setTab, profileName, onLock, onSettings }) {
         ))}
       </nav>
       <div className="side-nav-footer">
-        <button type="button" title="Log out" onClick={onLock} aria-label="Log out" className="side-nav-footer-btn">
-          <Lock size={18} />
-          <span>Lock</span>
+        <button
+          type="button"
+          onClick={onSettings}
+          className={`side-nav-sync ${syncEnabled ? "side-nav-sync--on" : "side-nav-sync--off"}`}
+          aria-label={syncEnabled ? "Auto-sync is on. Open settings." : "Turn on sync in settings"}
+        >
+          <Cloud size={16} />
+          <span>{syncLabel}</span>
         </button>
-        <button type="button" title="Settings" onClick={onSettings} aria-label="Open settings" className="side-nav-footer-btn">
-          <Gear size={18} />
-          <span>Settings</span>
-        </button>
+        <div className="side-nav-footer-actions">
+          <button type="button" title="Log out" onClick={onLock} aria-label="Log out" className="side-nav-footer-btn">
+            <Lock size={18} />
+            <span>Lock</span>
+          </button>
+          <button type="button" title="Settings" onClick={onSettings} aria-label="Open settings" className="side-nav-footer-btn">
+            <Gear size={18} />
+            <span>Settings</span>
+          </button>
+        </div>
       </div>
     </aside>
   );
