@@ -1,6 +1,6 @@
 const CORS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, PUT, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, X-Sync-Id",
 };
 
@@ -38,7 +38,7 @@ export default async (req) => {
     return json(data ?? null);
   }
 
-  if (req.method === "PUT") {
+  if (req.method === "POST" || req.method === "PUT") {
     let body;
     try {
       body = await req.json();

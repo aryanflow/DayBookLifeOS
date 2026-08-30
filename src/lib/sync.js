@@ -1,32 +1,45 @@
 import { encryptApp, decryptApp } from "./syncCrypto";
 import { normalizeBackup } from "./migrate";
 
-function resolveApiBase() {
+function resolveSyncUrl() {
   const env = (import.meta.env.VITE_SYNC_API_URL || "").replace(/\/$/, "");
-  if (env) return env;
+  if (env) return `${env}/sync`;
   if (typeof window !== "undefined") {
-    return `${window.location.origin}/api`;
+    // Dev: Vite middleware. Prod: call the function directly (avoids _redirects / PUT on static files).
+    if (import.meta.env.DEV) return `${window.location.origin}/api/sync`;
+    return `${window.location.origin}/.netlify/functions/sync`;
   }
   return "";
 }
 
 export function isSyncAvailable() {
-  return !!resolveApiBase();
+  return !!resolveSyncUrl();
 }
 
 export function getSyncApiUrl() {
-  return resolveApiBase();
+  return resolveSyncUrl().replace(/\/sync$/, "");
 }
 
 async function parseJson(res) {
   const text = await res.text();
   if (!text) return null;
-  return JSON.parse(text);
+  try {
+    return JSON.parse(text);
+  } catch {
+    const preview = text.replace(/\s+/g, " ").trim().slice(0, 80);
+    const err = new Error(
+      preview.startsWith("<!")
+        ? "Sync API not reachable - redeploy with Netlify Functions enabled"
+        : preview || "Sync server returned an invalid response"
+    );
+    err.status = res.status;
+    throw err;
+  }
 }
 
 export async function fetchRemote(syncId) {
-  const base = resolveApiBase();
-  const res = await fetch(`${base}/sync`, {
+  const url = resolveSyncUrl();
+  const res = await fetch(url, {
     method: "GET",
     headers: { "X-Sync-Id": syncId },
   });
@@ -39,9 +52,9 @@ export async function fetchRemote(syncId) {
 }
 
 export async function pushRemote(syncId, record) {
-  const base = resolveApiBase();
-  const res = await fetch(`${base}/sync`, {
-    method: "PUT",
+  const url = resolveSyncUrl();
+  const res = await fetch(url, {
+    method: "POST",
     headers: {
       "X-Sync-Id": syncId,
       "Content-Type": "application/json",

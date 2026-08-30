@@ -4,7 +4,7 @@ export function syncDevPlugin() {
 
   const cors = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, PUT, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, X-Sync-Id",
   };
 
@@ -54,7 +54,7 @@ export function syncDevPlugin() {
           return;
         }
 
-        if (req.method === "PUT") {
+        if (req.method === "POST" || req.method === "PUT") {
           let body;
           try {
             body = await readBody(req);

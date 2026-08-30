@@ -9,4 +9,5 @@
 /sw.js                    /sw.js                    200
 /registerSW.js            /registerSW.js            200
 /assets/*                 /assets/:splat            200
+/api/sync                 /.netlify/functions/sync  200
 /*                        /index.html               200
