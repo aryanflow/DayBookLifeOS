@@ -342,12 +342,6 @@ body.modal-open .app-main {
   border-color: color-mix(in srgb, var(--db-work) 28%, transparent);
 }
 
-.habit-emoji-picker {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
 .habit-row {
   display: grid;
   grid-template-columns: auto 1fr auto;

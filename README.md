@@ -37,7 +37,7 @@ Open [http://localhost:5173](http://localhost:5173) and tap **Login as Test - sa
 | Tab | Job (5 words) |
 |-----|----------------|
 | **Today** | Log your whole day fast |
-| **Habits** | Track streaks, customize emoji & order |
+| **Habits** | Track streaks and consistency |
 | **Money** | Budget, charts, spending history |
 | **Food** | Meal quality and eating score |
 | **Work** | Tasks and searchable notes |
