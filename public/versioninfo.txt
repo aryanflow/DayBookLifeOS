@@ -1,6 +1,6 @@
 Daybook Life OS
 Version: 1.0.0
-Commit: 4c51540 (4c515400d7a67905bf0e99688a17bf96d254793f)
-Message: Fix Netlify sync hitting static host instead of function.
+Commit: 99a4bc4 (99a4bc4703202eae1a27545023b2643d8ea60d27)
+Message: Revert cluttered habit emoji picker UI.
 Author: Aryan Kashyap
-Built: 2026-08-30T09:07:40.797Z
+Built: 2026-08-30T10:09:54.978Z

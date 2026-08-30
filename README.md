@@ -1,157 +1,99 @@
-# Daybook - Life OS
+# Daybook Life OS
 
-Your private daily Life OS. Habits, money, food, work, and wellness in one place - **local-first**, with **optional encrypted sync** across devices.
+A private daily Life OS for habits, money, food, work, and wellness. Data stays on your device by default; optional encrypted sync keeps profiles aligned across browsers.
 
-![Daybook icon](public/favicon.svg)
+**Live app:** [daybookzero.netlify.app](https://daybookzero.netlify.app/)
 
-## Screenshots
+![Today view](public/screenshots/desktop-today.png)
 
-| Today (mobile) | Habits (mobile) | Money (mobile) |
-|:---:|:---:|:---:|
-| ![Today mobile](public/screenshots/mobile-today.png) | ![Habits mobile](public/screenshots/mobile-habits.png) | ![Money mobile](public/screenshots/mobile-money.png) |
-
-| Work (mobile) | Today (desktop) | Trends (desktop) |
-|:---:|:---:|:---:|
-| ![Work mobile](public/screenshots/mobile-work.png) | ![Today desktop](public/screenshots/desktop-today.png) | ![Trends desktop](public/screenshots/desktop-trends.png) |
-
-## Try it in 30 seconds
+## Quick start
 
 ```bash
 npm install
 npm run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173) and tap **Login as Test - sample data** to explore a fully populated demo profile.
+Open [localhost:5173](http://localhost:5173) and choose **Login as Test - sample data** to explore a populated demo profile.
 
-## Why Daybook?
+## What you get
 
-| | Daybook | Typical tracker apps |
-|---|---------|---------------------|
-| **Privacy** | Local-first; sync is encrypted end-to-end | Cloud reads your data |
-| **Speed** | Instant open, offline PWA | Login, sync waits |
-| **Household** | Multiple profiles on one device | One account per install |
-| **Cost** | Free static hosting + Netlify free tier | Subscriptions |
-
-## Features
-
-| Tab | Job (5 words) |
-|-----|----------------|
-| **Today** | Log your whole day fast |
-| **Habits** | Track streaks and consistency |
-| **Money** | Budget, charts, spending history |
+| Area | What it does |
+|------|----------------|
+| **Today** | Log mood, sleep, water, and quick notes for the day |
+| **Habits** | Track streaks and daily completion |
+| **Money** | Budget, spending history, and charts |
 | **Food** | Meal quality and eating score |
 | **Work** | Tasks and searchable notes |
-| **Trends** | See patterns unlock over time |
+| **Trends** | Patterns that unlock as you log more days |
 
-### Multi-user & PIN
+### Profiles and PIN
 
-- Each person gets their own habits, spending, meals, and notes
-- Optional **4-digit PIN** per profile (device unlock + `/logs` access)
-- PIN is registered server-side when set (for household admin recovery at `/admin`)
-- **Switch person** from the lock icon without deleting anyone's data
-- **Backup my profile** or **Backup everyone** as JSON
+- Multiple people can share one device, each with separate data
+- Optional 4-digit PIN per profile for unlock and `/logs` access
+- Switch profiles from the lock icon without deleting anyone's history
+- Export one profile or everyone as JSON from Settings
 
-### Encrypted sync (Netlify)
+### Encrypted sync
 
 Settings → **Sync across devices**:
 
-1. **Turn on sync** - get a 24-character sync code (save it somewhere safe)
-2. On another device: Settings → **Link this device** → paste the same code
-3. Changes auto-sync every few seconds when online
+1. Turn on sync and save the 24-character sync code
+2. On another device, link with the same code
+3. Changes sync automatically when online
 
-- Data is **AES-GCM encrypted** in the browser before upload
-- Stored in **Netlify Blobs** via `/.netlify/functions/sync`
-- **Last-write-wins** across devices
-- PINs stay hashed locally for unlock; plaintext PIN is only in admin registry when user sets/changes PIN
+Data is AES-GCM encrypted in the browser before upload. Netlify Blobs store the ciphertext via `/.netlify/functions/sync`. Conflicts use last-write-wins.
 
-## Deploy (Netlify)
+## Deploy on Netlify
 
 1. Push this repo to GitHub
-2. [Netlify](https://app.netlify.com) → **Add new site** → Import the repo
-3. Build: `npm run build` · Publish: `dist`
-4. **Environment variables** (Site configuration → Environment variables):
-   - `LOGS_ADMIN_KEY` — long random secret for `/admin`
-   - Redeploy after adding env vars
+2. [Netlify](https://app.netlify.com) → **Add new site** → import the repo
+3. Build command: `npm run build` · Publish directory: `dist`
+4. Add environment variable `LOGS_ADMIN_KEY` (long random secret for `/admin`)
+5. Redeploy after adding env vars
 
-`netlify.toml` includes functions for **sync**, **logs**, and **admin**.
+`netlify.toml` wires up sync, logs, and admin functions.
 
-### URLs after deploy
+### Routes
 
-| URL | Who | Purpose |
-|-----|-----|---------|
+| URL | Access | Purpose |
+|-----|--------|---------|
 | `/` | Everyone | Main app |
-| `/logs` | Users | View **your own** activity log (name + PIN) |
-| `/admin?key=…` | Admin | User registry, PINs, delete users, view all logs |
-| `/version` | Everyone | Build version info |
-| `/versioninfo.txt` | Everyone | Plain-text version |
+| `/logs` | Profile name + PIN | Your activity log |
+| `/admin?key=…` | Admin key | User registry, PINs, delete users |
+| `/version` | Everyone | Build info (formatted page) |
+| `/versioninfo.txt` | Everyone | Same info as plain text |
 
 ## Activity logs
 
-**User view** — `/logs`
+**Users** open `/logs`, enter profile name and PIN, and see their own events (spends, habits, sync, errors).
 
-- Enter profile name + PIN (if you set one)
-- See your own events (spends, habits, sync, errors, etc.)
+**Admins** open `/admin` with `LOGS_ADMIN_KEY` to view all users, see PINs, and delete a user (logs, registry, and sync blob). The profile clears locally when that person next opens the app.
 
-**Admin** — `/admin`
+Local dev uses `dev-admin` as the default admin key.
 
-- Requires `LOGS_ADMIN_KEY`
-- See all users: created date, last activity, **PIN**, event count
-- **Delete user** removes: activity logs, registry entry, encrypted sync blob
-- Device clears that profile on next app open
+Logs store metadata only, not full diary text.
 
-Local dev: admin key defaults to `dev-admin`.
+## Data and privacy
 
-**Honest limits:** logs are metadata only (not full diary text). Admin delete cannot wipe another person's browser until they open the app.
+Everything lives in browser `localStorage` under `db_app`. Export JSON or CSV from Settings anytime.
 
-## Data & privacy
-
-All data lives in your browser under `localStorage` key `db_app`:
-
-```json
-{
-  "version": 2,
-  "users": [...],
-  "activeUserId": "...",
-  "userData": { "...": { habits, spends, meals, ... } }
-}
-```
-
-- **Export** JSON or CSV from Settings
-- **PINs** hashed locally for unlock; admin registry stores PIN when set/changed (household recovery)
-- **Sync code** encrypts your backup - treat it like a password
-- Destructive deletes show an **Undo** toast (5 seconds) across Money, Food, Habits, Work
-
-## Project structure
-
-```
-src/
-├── components/
-│   ├── admin/      UserLogsPage, AdminPage, logFormat
-│   ├── auth/       Welcome, user select, PIN
-│   ├── layout/     Header, nav, settings
-│   ├── ui/         Card, DayPulse, chips
-│   └── views/      Today, Habits, Money, Food, Work, Trends
-├── hooks/          Store, toast, habits, sync, activity logger
-├── lib/            Storage, dates, auth, export, sync, userRegistry
-netlify/functions/  sync.mjs, logs.mjs, admin.mjs
-public/screenshots/ App screenshots for README
-```
+- PINs are hashed locally for unlock; plaintext PIN is stored in the admin registry only when set or changed (household recovery)
+- Treat your sync code like a password
+- Destructive deletes offer a 5-second undo toast
 
 ## Scripts
 
-| Command | What it does |
-|---------|--------------|
-| `npm run dev` | Local dev (API mocks at `/api/sync`, `/api/logs`, `/api/admin`) |
-| `npm run build` | Production build to `dist/` |
-| `npm run preview` | Preview production build |
-| `node scripts/screenshot-audit.mjs` | Capture mobile + desktop screenshots |
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Dev server with local API mocks |
+| `npm run build` | Production build (generates version info first) |
+| `npm run preview` | Preview the production build |
 
-## Tech stack
+## Stack
 
-- React 18 + Vite 6
-- PWA via vite-plugin-pwa
-- Netlify Functions + Blobs (sync, logs, admin registry)
-- Optional Cloudflare Worker sync (`worker/`) if you prefer KV over Netlify
+React 18 · Vite 6 · PWA · Netlify Functions and Blobs
+
+An optional Cloudflare Worker sync backend lives in `worker/` if you prefer KV over Netlify.
 
 ## License
 

@@ -22,11 +22,6 @@
   force = true
 
 [[redirects]]
-  from = "/version"
-  to = "/versioninfo.txt"
-  status = 200
-
-[[redirects]]
   from = "/api/sync"
   to = "/.netlify/functions/sync"
   status = 200

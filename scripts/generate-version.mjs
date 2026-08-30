@@ -11,10 +11,24 @@ function git(cmd) {
 
 const pkg = JSON.parse(readFileSync("package.json", "utf8"));
 const version = pkg.version || "0.0.0";
-const commit = git("git rev-parse --short HEAD") || "unknown";
-const commitFull = git("git rev-parse HEAD") || "unknown";
-const message = git('git log -1 --pretty=%s') || "No commit message";
-const author = git('git log -1 --pretty=%an') || "unknown";
+
+const commitFull =
+  git("git rev-parse HEAD") ||
+  process.env.COMMIT_REF ||
+  process.env.NETLIFY_COMMIT_REF ||
+  "unknown";
+const commit =
+  git("git rev-parse --short HEAD") ||
+  (commitFull !== "unknown" ? commitFull.slice(0, 7) : "unknown");
+const message =
+  git('git log -1 --pretty=%s') ||
+  process.env.COMMIT_MESSAGE ||
+  process.env.NETLIFY_COMMIT_MESSAGE ||
+  "No commit message";
+const author =
+  git('git log -1 --pretty=%an') ||
+  process.env.COMMIT_AUTHOR ||
+  "unknown";
 const builtAt = new Date().toISOString();
 
 const info = { version, commit, commitFull, message, author, builtAt };
