@@ -9,6 +9,7 @@ import {
 } from "../lib/syncConfig";
 import { hashSyncId } from "../lib/syncCrypto";
 import { encryptAndPush, fetchRemote, isSyncAvailable, pullAndDecrypt } from "../lib/sync";
+import { logActivity } from "../lib/activityLog";
 
 const PUSH_DELAY_MS = 2500;
 
@@ -202,6 +203,10 @@ export function useSync({ app, importApp }) {
     next.lastSyncedAt = new Date().toISOString();
     setConfig(next);
     setStatus("synced");
+    const active = app.users.find((u) => u.id === app.activeUserId);
+    if (active) {
+      logActivity("sync.enabled", { userName: active.name, userId: active.id });
+    }
     return { ok: true, syncKey };
   }, [app, setConfig]);
 
@@ -236,6 +241,10 @@ export function useSync({ app, importApp }) {
         };
         setConfig(next);
         setStatus("synced");
+        const active = app.users.find((u) => u.id === app.activeUserId);
+        if (active) {
+          logActivity("sync.linked", { userName: active.name, userId: active.id });
+        }
         return { ok: true };
       } catch (e) {
         setStatus("error");

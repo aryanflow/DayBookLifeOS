@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useTheme, ThemeProvider } from "./theme/ThemeContext";
 import { useDaybookStore } from "./hooks/useDaybookStore";
 import { useToast } from "./hooks/useToast";
@@ -25,6 +25,7 @@ import { exportData, exportCSV, parseBackupJSON, mergeBackup } from "./lib/expor
 import { hasLegacyOrphanData } from "./lib/migrate";
 import { currencySymbol } from "./constants";
 import { fontBody } from "./theme/colors";
+import { logActivity } from "./lib/activityLog";
 import "./styles/global.css";
 
 function DaybookApp({ store }) {
@@ -92,10 +93,78 @@ function DaybookApp({ store }) {
   const spendTotalToday = spendsToday.reduce((a, s) => a + s.amount, 0);
 
   const streak = useHabitStreak(habitLog);
-  const toggleHabit = useToggleHabit(habitLog, setHabitLog, day);
+  const baseToggleHabit = useToggleHabit(habitLog, setHabitLog, day);
+  const prevActiveId = useRef(null);
+
+  useEffect(() => {
+    if (activeUser?.id && activeUser.id !== prevActiveId.current) {
+      logActivity("user.login", { userName: activeUser.name, userId: activeUser.id });
+    }
+    prevActiveId.current = activeUser?.id ?? null;
+  }, [activeUser?.id, activeUser?.name]);
+
+  const handleLogout = useCallback(() => {
+    if (profile?.name) {
+      logActivity("user.logout", { userName: profile.name, userId: profile.id });
+    }
+    logout();
+  }, [logout, profile]);
+
+  const logSetSpends = useCallback(
+    (fn) => {
+      setSpends((prev) => {
+        const next = typeof fn === "function" ? fn(prev) : fn;
+        if (profile && Array.isArray(next) && next.length > prev.length) {
+          const added = next[next.length - 1];
+          logActivity("spend.added", {
+            userName: profile.name,
+            userId: profile.id,
+            detail: { amount: added.amount, note: added.note, cat: added.cat },
+          });
+        }
+        return next;
+      });
+    },
+    [setSpends, profile]
+  );
+
+  const logSetMeals = useCallback(
+    (fn) => {
+      setMeals((prev) => {
+        const next = typeof fn === "function" ? fn(prev) : fn;
+        if (profile && Array.isArray(next) && next.length > prev.length) {
+          const added = next[next.length - 1];
+          logActivity("meal.added", {
+            userName: profile.name,
+            userId: profile.id,
+            detail: { name: added.name, quality: added.quality },
+          });
+        }
+        return next;
+      });
+    },
+    [setMeals, profile]
+  );
+
+  const toggleHabit = useCallback(
+    (id) => {
+      baseToggleHabit(id);
+      if (profile) {
+        const habit = habits.find((h) => h.id === id);
+        logActivity("habit.toggled", {
+          userName: profile.name,
+          userId: profile.id,
+          detail: { habit: habit?.name || id },
+        });
+      }
+    },
+    [baseToggleHabit, habits, profile]
+  );
 
   const handleRestore = (data) => {
     importApp(mergeBackup(app, data));
+    const name = activeUser?.name || users[0]?.name;
+    if (name) logActivity("backup.imported", { userName: name, userId: activeUser?.id || users[0]?.id });
     ping("Backup restored");
   };
 
@@ -117,6 +186,7 @@ function DaybookApp({ store }) {
       ping("That name is already taken - pick another");
       return false;
     }
+    logActivity("user.created", { userName: result.user.name, userId: result.user.id });
     return true;
   };
 
@@ -200,7 +270,7 @@ function DaybookApp({ store }) {
         tab={tab}
         setTab={setTab}
         profileName={profile.name}
-        onLock={logout}
+        onLock={handleLogout}
         onSettings={() => setShowSettings(true)}
         syncEnabled={sync.enabled}
         syncStatus={sync.status}
@@ -219,7 +289,7 @@ function DaybookApp({ store }) {
           showDays={showDays}
           setShowDays={setShowDays}
           setViewDate={setViewDate}
-          onLock={logout}
+          onLock={handleLogout}
           setShowSettings={setShowSettings}
         />
 
@@ -243,8 +313,8 @@ function DaybookApp({ store }) {
                 spendTotalToday={spendTotalToday}
                 budget={budget}
                 currencySymbol={sym}
-                setSpends={setSpends}
-                setMeals={setMeals}
+                setSpends={logSetSpends}
+                setMeals={logSetMeals}
                 today={day}
                 isToday={isToday}
                 ping={ping}
@@ -323,7 +393,13 @@ function DaybookApp({ store }) {
           }}
           importData={handleImport}
           onLogout={logout}
-          onDeleteUser={() => deleteUser(profile.id)}
+          onDeleteUser={() => {
+            const removed = deleteUser(profile.id);
+            if (removed) {
+              logActivity("user.deleted", { userName: removed.user.name, userId: removed.user.id });
+            }
+            return removed;
+          }}
           onRestoreUser={restoreUser}
           onClose={() => setShowSettings(false)}
           ping={ping}

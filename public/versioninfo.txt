@@ -1,0 +1,6 @@
+Daybook Life OS
+Version: 1.0.0
+Commit: 4c51540 (4c515400d7a67905bf0e99688a17bf96d254793f)
+Message: Fix Netlify sync hitting static host instead of function.
+Author: Aryan Kashyap
+Built: 2026-08-30T09:07:40.797Z

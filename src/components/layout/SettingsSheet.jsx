@@ -406,6 +406,14 @@ export function SettingsSheet({
             </div>
           </SettingsBlock>
 
+          <SettingsBlock label="About">
+            <div style={{ fontSize: 13, color: T.inkSoft, fontWeight: 600, lineHeight: 1.6 }}>
+              <a href="/version" style={{ color: T.accent, fontWeight: 700 }}>Version info</a>
+              {" · "}
+              <a href="/logs" style={{ color: T.accent, fontWeight: 700 }}>Activity logs</a>
+            </div>
+          </SettingsBlock>
+
           <SettingsBlock label="Account">
             <div style={{ display: "grid", gap: 8 }}>
               <button type="button" onClick={handleLogout} style={rowBtn}><LogOut size={14} /> Switch person / log out</button>

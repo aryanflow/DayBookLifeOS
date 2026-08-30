@@ -121,6 +121,28 @@ npm run sync:dev
 npm run dev
 ```
 
+## Version info
+
+Every `npm run build` writes `public/versioninfo.txt` from the latest git commit:
+
+- **https://your-site.netlify.app/versioninfo.txt** — plain text
+- **https://your-site.netlify.app/version** — same file, friendly redirect
+- **https://your-site.netlify.app/version** (React page) — formatted view
+
+Includes app version, commit hash, commit message, author, and build time.
+
+## Activity logs (admin)
+
+Server-side activity log for logins, spends, meals, habits, sync, etc.
+
+1. Set **`LOGS_ADMIN_KEY`** in Netlify → Site settings → Environment variables (pick a long random string)
+2. Open **https://your-site.netlify.app/logs?key=YOUR_KEY** (or enter the key on `/logs`)
+3. Filter by user, refresh, or **Remove** a user to delete their logs and block future entries from that name
+
+Local dev: admin key defaults to `dev-admin` (see `.env.example`).
+
+**Honest limits:** logs are metadata only (not full diary content). Removing a user from logs does not delete their local app data or encrypted sync blob on their device.
+
 ## Data & privacy
 
 All data lives in your browser under the `db_app` localStorage key:
