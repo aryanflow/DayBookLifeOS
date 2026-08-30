@@ -40,6 +40,7 @@ export function logActivity(action, { userName, userId, detail } = {}) {
     action,
     detail: detail ?? null,
     deviceId: deviceId(),
+    path: typeof window !== "undefined" ? window.location.pathname : null,
   };
 
   fetch(url, {
@@ -48,6 +49,46 @@ export function logActivity(action, { userName, userId, detail } = {}) {
     body: JSON.stringify(payload),
     keepalive: true,
   }).catch(() => {});
+}
+
+export function installGlobalErrorLogging(getContext) {
+  const onError = (event) => {
+    const ctx = getContext();
+    if (!ctx?.userName) return;
+    logActivity("app.error", {
+      userName: ctx.userName,
+      userId: ctx.userId,
+      detail: {
+        ...(ctx.detail || {}),
+        level: "error",
+        message: event.message || "Unknown error",
+        source: event.filename ? `${event.filename}:${event.lineno}:${event.colno}` : undefined,
+      },
+    });
+  };
+
+  const onRejection = (event) => {
+    const ctx = getContext();
+    if (!ctx?.userName) return;
+    const reason = event.reason;
+    logActivity("app.unhandled_rejection", {
+      userName: ctx.userName,
+      userId: ctx.userId,
+      detail: {
+        ...(ctx.detail || {}),
+        level: "error",
+        message: reason?.message || String(reason ?? "Unhandled rejection"),
+        stack: reason?.stack?.split("\n").slice(0, 4).join(" | "),
+      },
+    });
+  };
+
+  window.addEventListener("error", onError);
+  window.addEventListener("unhandledrejection", onRejection);
+  return () => {
+    window.removeEventListener("error", onError);
+    window.removeEventListener("unhandledrejection", onRejection);
+  };
 }
 
 export function getLogsApiUrl() {
@@ -76,16 +117,18 @@ export function saveAdminKey(key) {
   }
 }
 
-export async function fetchLogs({ adminKey, user, limit = 200 }) {
+export async function fetchLogs({ adminKey, user, pin, limit = 200 }) {
   const base = logsUrl();
   if (!base) throw new Error("Logs API not configured");
 
   const params = new URLSearchParams({ limit: String(limit) });
   if (user) params.set("user", user);
+  if (pin !== undefined && pin !== null) params.set("pin", pin);
 
-  const res = await fetch(`${base}?${params}`, {
-    headers: { "X-Admin-Key": adminKey },
-  });
+  const headers = {};
+  if (adminKey) headers["X-Admin-Key"] = adminKey;
+
+  const res = await fetch(`${base}?${params}`, { headers });
 
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Could not load logs");

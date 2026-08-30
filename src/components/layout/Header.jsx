@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { Lock, Gear } from "../icons";
 import { daysAround, shortDay } from "../../lib/dates";
 import { TABS } from "../../constants";
@@ -95,11 +96,21 @@ export function Header({
 
 function DayStrip({ today, day, setViewDate, setShowDays, isToday }) {
   const { T } = useTheme();
+  const stripRef = useRef(null);
+
+  useEffect(() => {
+    const container = stripRef.current;
+    const activeBtn = container?.querySelector(`[data-day="${day}"]`);
+    if (!container || !activeBtn) return;
+    const left = activeBtn.offsetLeft - container.clientWidth / 2 + activeBtn.clientWidth / 2;
+    container.scrollTo({ left: Math.max(0, left), behavior: "smooth" });
+  }, [day]);
 
   return (
     <div className="content-wrap" style={{ paddingTop: 4, paddingBottom: 8 }}>
       <div
-        className="fade-up"
+        ref={stripRef}
+        className="fade-up day-strip-scroll"
         style={{
           display: "flex",
           gap: 6,
@@ -119,11 +130,11 @@ function DayStrip({ today, day, setViewDate, setShowDays, isToday }) {
             <button
               key={d}
               type="button"
+              data-day={d}
               onClick={() => {
                 setViewDate(d);
-                if (isT) setShowDays(false);
+                setShowDays(false);
               }}
-              ref={isT ? (el) => el && el.scrollIntoView({ inline: "center", block: "nearest" }) : undefined}
               style={{
                 ...fontHead,
                 flexShrink: 0,

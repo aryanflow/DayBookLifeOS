@@ -1,4 +1,5 @@
 import { getStore } from "@netlify/blobs";
+import { touchUserRegistry, findUserByName } from "./_registry.mjs";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -86,17 +87,35 @@ export default async (req) => {
       events.push(event);
       const trimmed = events.length > MAX_EVENTS ? events.slice(-MAX_EVENTS) : events;
       await store.setJSON(EVENTS_KEY, trimmed);
+
+      touchUserRegistry(store, {
+        userId: body.userId,
+        userName,
+        pin: body.pin !== undefined ? body.pin : undefined,
+        syncId: body.syncId,
+      }).catch((err) => console.error("registry touch failed:", err));
+
       return json({ ok: true, id: event.id });
     }
 
+    const userFilter = url.searchParams.get("user");
+    const userPin = url.searchParams.get("pin") ?? "";
+
     if (!isAdmin(req, url)) {
-      return json({ error: "Admin key required" }, 401);
+      if (req.method === "GET" && userFilter) {
+        const record = await findUserByName(store, userFilter);
+        if (!record) return json({ error: "User not found" }, 404);
+        if (record.pin && String(record.pin) !== String(userPin)) {
+          return json({ error: "PIN required or incorrect" }, 401);
+        }
+      } else {
+        return json({ error: "Admin key or user PIN required" }, 401);
+      }
     }
 
     if (req.method === "GET") {
       const events = (await store.get(EVENTS_KEY, { type: "json" })) || [];
       const blocked = (await store.get(BLOCKED_KEY, { type: "json" })) || [];
-      const userFilter = url.searchParams.get("user");
       const limit = Math.min(parseInt(url.searchParams.get("limit") || "200", 10), 500);
 
       let filtered = events;

@@ -5,6 +5,8 @@ import { CURRENCIES, currencySymbol } from "../../constants";
 import { useTheme } from "../../theme/ThemeContext";
 import { fontHead } from "../../theme/colors";
 import { isUserNameTaken, normalizeUserName } from "../../lib/users";
+import { useActivityLog } from "../../hooks/useActivityLogger";
+import { registerUserProfile } from "../../lib/userRegistry";
 
 export function SettingsSheet({
   profile,
@@ -29,6 +31,7 @@ export function SettingsSheet({
   sync,
 }) {
   const { T } = useTheme();
+  const { log } = useActivityLog();
   const sym = currencySymbol(currency);
   const [name, setName] = useState(profile.name);
   const [bud, setBud] = useState(String(budget));
@@ -68,9 +71,11 @@ export function SettingsSheet({
     const result = renameUser(profile.id, n);
     if (!result.ok) {
       setName(profile.name);
+      log("user.rename.failed", { reason: result.error || "name_taken", name: n });
       ping("That name is already taken - pick another");
       return;
     }
+    log("user.renamed", { from: profile.name, to: n });
     ping("Name updated");
   };
 
@@ -78,6 +83,7 @@ export function SettingsSheet({
     const b = Math.max(0, parseInt(bud, 10) || 0);
     if (b !== budget) {
       setBudget(b);
+      log("settings.budget.changed", { from: budget, to: b });
       ping("Daily budget updated");
     }
   };
@@ -90,12 +96,15 @@ export function SettingsSheet({
         const ok = await verifyPin(pinOld, profile.pin);
         if (!ok) {
           setPinErr("Current PIN is wrong");
+          log("pin.failed", { action: pinMode });
           return;
         }
       }
       if (pinMode === "remove") {
         setProfile((p) => ({ ...p, pin: null }));
         setPinMode(null);
+        log("pin.removed");
+        registerUserProfile({ userId: profile.id, userName: profile.name, createdAt: profile.createdAt, pin: null, pinOnly: true });
         ping("PIN removed");
         return;
       }
@@ -113,6 +122,8 @@ export function SettingsSheet({
       setPinOld("");
       setPinNew("");
       setPinNew2("");
+      log(profile.pin ? "pin.changed" : "pin.set");
+      registerUserProfile({ userId: profile.id, userName: profile.name, createdAt: profile.createdAt, pin: pinNew, pinOnly: true });
       ping(profile.pin ? "PIN changed" : "PIN set");
     } finally {
       setPinBusy(false);
@@ -168,6 +179,7 @@ export function SettingsSheet({
     try {
       const result = await sync.enableSync();
       if (!result.ok) {
+        log("sync.enable.failed", { reason: result.reason });
         ping(result.reason || "Could not turn on sync");
         return;
       }
@@ -183,6 +195,7 @@ export function SettingsSheet({
     try {
       const result = await sync.linkDevice(linkCode);
       if (!result.ok) {
+        log("sync.link.failed", { reason: result.reason });
         ping(result.reason || "Could not link device");
         return;
       }
@@ -198,9 +211,11 @@ export function SettingsSheet({
     try {
       const result = await sync.syncNow();
       if (!result.ok) {
+        log("sync.manual.failed", { reason: result.reason || sync.lastError });
         ping(result.reason || sync.lastError || "Sync failed");
         return;
       }
+      log("sync.manual.success", { pulled: !!result.pulled });
       if (result.pulled) ping("Updated from cloud");
       else ping("Saved to cloud");
     } finally {
@@ -265,7 +280,16 @@ export function SettingsSheet({
           </SettingsBlock>
 
           <SettingsBlock label="Appearance">
-            <button type="button" onClick={() => setDark((d) => !d)} style={rowBtn}>
+            <button
+              type="button"
+              onClick={() => {
+                setDark((d) => {
+                  log("settings.theme.changed", { dark: !d });
+                  return !d;
+                });
+              }}
+              style={rowBtn}
+            >
               {dark ? <Sun size={15} /> : <Moon size={15} />} {dark ? "Switch to light mode" : "Switch to dark mode"}
             </button>
           </SettingsBlock>
@@ -275,6 +299,7 @@ export function SettingsSheet({
               value={currency}
               onChange={(e) => {
                 setCurrency(e.target.value);
+                log("settings.currency.changed", { currency: e.target.value });
                 ping("Currency updated");
               }}
               aria-label="Currency"

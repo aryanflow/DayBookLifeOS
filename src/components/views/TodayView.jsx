@@ -6,6 +6,7 @@ import { SPEND_CATS, MEAL_QUALITY, MOODS } from "../../constants";
 import { greeting } from "../../lib/dates";
 import { useTheme } from "../../theme/ThemeContext";
 import { fontHead, fontBody } from "../../theme/colors";
+import { useActivityLog } from "../../hooks/useActivityLogger";
 
 function bodyInsight(glasses, waterGoal, hours) {
   const waterLeft = Math.max(0, waterGoal - glasses);
@@ -104,6 +105,7 @@ export function TodayView({
 
 function BodyCard({ today, water, setWater, sleep, setSleep, ping, className = "" }) {
   const { T } = useTheme();
+  const { log } = useActivityLog();
   const glasses = water[today] || 0;
   const hours = sleep[today] ?? null;
   const waterGoal = 8;
@@ -130,6 +132,7 @@ function BodyCard({ today, water, setWater, sleep, setSleep, ping, className = "
               onClick={() => {
                 const next = i + 1 === glasses ? i : i + 1;
                 setWater((p) => ({ ...p, [today]: next }));
+                log("body.water.updated", { date: today, glasses: next });
                 if (next === waterGoal) ping("Water goal hit! 💧🎉");
               }}
               aria-label={`${i + 1} glass${i === 0 ? "" : "es"}${i < glasses ? ", filled" : ""}`}
@@ -156,7 +159,11 @@ function BodyCard({ today, water, setWater, sleep, setSleep, ping, className = "
             max="12"
             step="0.5"
             value={hours ?? 7}
-            onChange={(e) => setSleep((p) => ({ ...p, [today]: parseFloat(e.target.value) }))}
+            onChange={(e) => {
+              const hours = parseFloat(e.target.value);
+              setSleep((p) => ({ ...p, [today]: hours }));
+              log("body.sleep.updated", { date: today, hours });
+            }}
             aria-label="Hours slept"
             className="sleep-slider"
             style={{ accentColor: T.journal }}
@@ -191,6 +198,7 @@ function BodyCard({ today, water, setWater, sleep, setSleep, ping, className = "
 
 function JournalCard({ today, notes, setNotes, ping, className = "" }) {
   const { T } = useTheme();
+  const { log } = useActivityLog();
   const entry = notes[today] || { text: "", mood: null };
   const [draft, setDraft] = useState(entry.text);
   useEffect(() => {
@@ -199,6 +207,7 @@ function JournalCard({ today, notes, setNotes, ping, className = "" }) {
 
   const save = () => {
     setNotes((p) => ({ ...p, [today]: { ...(p[today] || {}), text: draft.trim() } }));
+    log("journal.updated", { date: today, length: draft.trim().length });
     if (draft.trim()) ping("Day noted 📝");
   };
 
@@ -210,15 +219,17 @@ function JournalCard({ today, notes, setNotes, ping, className = "" }) {
           <button
             key={m.id}
             type="button"
-            onClick={() =>
+            onClick={() => {
+              const nextMood = entry.mood === m.id ? null : m.id;
               setNotes((p) => ({
                 ...p,
                 [today]: {
                   ...(p[today] || { text: "" }),
-                  mood: p[today]?.mood === m.id ? null : m.id,
+                  mood: nextMood,
                 },
-              }))
-            }
+              }));
+              log("journal.mood.updated", { date: today, mood: nextMood });
+            }}
             aria-label={`Mood: ${m.id}`}
             aria-pressed={entry.mood === m.id}
             className={`mood-btn${entry.mood === m.id ? " mood-btn--active" : ""}`}

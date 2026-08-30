@@ -10,6 +10,12 @@
   node_bundler = "esbuild"
 
 [[redirects]]
+  from = "/api/admin"
+  to = "/.netlify/functions/admin"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/logs"
   to = "/.netlify/functions/logs"
   status = 200

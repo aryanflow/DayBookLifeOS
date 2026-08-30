@@ -3,7 +3,32 @@ export function syncDevPlugin() {
   const mem = new Map();
   const logEvents = [];
   const blockedUsers = new Set();
+  const registry = { users: {} };
+  const deletedIds = new Set();
   const devAdminKey = process.env.LOGS_ADMIN_KEY || process.env.VITE_LOGS_ADMIN_KEY || "dev-admin";
+
+  const adminCors = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, X-Admin-Key",
+  };
+
+  const touchRegistry = (body) => {
+    const existing = registry.users[body.userId] || {};
+    registry.users[body.userId] = {
+      userId: body.userId,
+      userName: body.userName,
+      createdAt: existing.createdAt || body.createdAt || new Date().toISOString().slice(0, 10),
+      lastActivityAt: body.pinOnly ? existing.lastActivityAt || new Date().toISOString() : new Date().toISOString(),
+      pin: body.pin !== undefined ? body.pin : existing.pin ?? null,
+      syncId: body.syncId !== undefined ? body.syncId : existing.syncId ?? null,
+    };
+  };
+
+  const findByName = (name) => {
+    const key = normalizeName(name);
+    return Object.values(registry.users).find((u) => normalizeName(u.userName) === key) || null;
+  };
 
   const syncCors = {
     "Access-Control-Allow-Origin": "*",
@@ -78,6 +103,8 @@ export function syncDevPlugin() {
             return;
           }
 
+          if (body.userId) touchRegistry(body);
+
           logEvents.push({
             id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             ts: body.ts || new Date().toISOString(),
@@ -95,10 +122,28 @@ export function syncDevPlugin() {
         }
 
         if (adminHeader !== devAdminKey) {
-          res.statusCode = 401;
-          res.setHeader("Content-Type", "application/json");
-          res.end(JSON.stringify({ error: "Admin key required" }));
-          return;
+          const userFilter = url.searchParams.get("user");
+          const userPin = url.searchParams.get("pin") ?? "";
+          if (req.method === "GET" && userFilter) {
+            const record = findByName(userFilter);
+            if (!record) {
+              res.statusCode = 404;
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ error: "User not found" }));
+              return;
+            }
+            if (record.pin && String(record.pin) !== String(userPin)) {
+              res.statusCode = 401;
+              res.setHeader("Content-Type", "application/json");
+              res.end(JSON.stringify({ error: "PIN required or incorrect" }));
+              return;
+            }
+          } else {
+            res.statusCode = 401;
+            res.setHeader("Content-Type", "application/json");
+            res.end(JSON.stringify({ error: "Admin key or user PIN required" }));
+            return;
+          }
         }
 
         if (req.method === "GET") {
@@ -144,6 +189,109 @@ export function syncDevPlugin() {
 
         res.statusCode = 405;
         res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify({ error: "Method not allowed" }));
+      });
+
+      server.middlewares.use("/api/admin", async (req, res) => {
+        Object.entries(adminCors).forEach(([k, v]) => res.setHeader(k, v));
+        if (req.method === "OPTIONS") {
+          res.statusCode = 204;
+          res.end();
+          return;
+        }
+
+        const url = new URL(req.url, "http://localhost");
+        const adminHeader = req.headers["x-admin-key"] || url.searchParams.get("key");
+
+        if (req.method === "POST") {
+          let body;
+          try {
+            body = await readBody(req);
+          } catch {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: "Invalid JSON" }));
+            return;
+          }
+          if (!body?.userId || !body?.userName) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: "Missing userId or userName" }));
+            return;
+          }
+          if (deletedIds.has(body.userId)) {
+            res.statusCode = 403;
+            res.end(JSON.stringify({ error: "User removed by admin", deleted: true }));
+            return;
+          }
+          touchRegistry(body);
+          res.statusCode = 200;
+          res.end(JSON.stringify({ ok: true }));
+          return;
+        }
+
+        if (req.method === "GET" && url.searchParams.get("check")) {
+          const userId = url.searchParams.get("userId");
+          res.statusCode = 200;
+          res.end(JSON.stringify({ deleted: deletedIds.has(userId) }));
+          return;
+        }
+
+        if (req.method === "GET" && url.searchParams.get("verify")) {
+          const record = findByName(url.searchParams.get("user"));
+          if (!record) {
+            res.statusCode = 404;
+            res.end(JSON.stringify({ error: "User not found" }));
+            return;
+          }
+          const pin = url.searchParams.get("pin") ?? "";
+          if (record.pin && String(record.pin) !== String(pin)) {
+            res.statusCode = 401;
+            res.end(JSON.stringify({ error: "PIN incorrect" }));
+            return;
+          }
+          res.statusCode = 200;
+          res.end(JSON.stringify({ ok: true, userId: record.userId, userName: record.userName, pin: record.pin }));
+          return;
+        }
+
+        if (adminHeader !== devAdminKey) {
+          res.statusCode = 401;
+          res.end(JSON.stringify({ error: "Admin key required" }));
+          return;
+        }
+
+        if (req.method === "GET") {
+          const users = Object.values(registry.users)
+            .filter((u) => !deletedIds.has(u.userId))
+            .map((u) => ({
+              ...u,
+              eventCount: logEvents.filter((e) => e.userId === u.userId).length,
+            }));
+          res.statusCode = 200;
+          res.end(JSON.stringify({ users, total: users.length, deletedIds: [...deletedIds] }));
+          return;
+        }
+
+        if (req.method === "DELETE") {
+          const userId = url.searchParams.get("userId");
+          const record = userId ? registry.users[userId] : findByName(url.searchParams.get("user"));
+          if (!record) {
+            res.statusCode = 404;
+            res.end(JSON.stringify({ error: "User not found" }));
+            return;
+          }
+          delete registry.users[record.userId];
+          deletedIds.add(record.userId);
+          blockedUsers.add(normalizeName(record.userName));
+          for (let i = logEvents.length - 1; i >= 0; i--) {
+            if (logEvents[i].userId === record.userId) logEvents.splice(i, 1);
+          }
+          if (record.syncId) mem.delete(record.syncId);
+          res.statusCode = 200;
+          res.end(JSON.stringify({ ok: true, userId: record.userId, userName: record.userName }));
+          return;
+        }
+
+        res.statusCode = 405;
         res.end(JSON.stringify({ error: "Method not allowed" }));
       });
 

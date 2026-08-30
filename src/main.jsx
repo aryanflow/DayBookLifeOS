@@ -8,10 +8,20 @@ async function mount() {
   const root = createRoot(document.getElementById("root"));
 
   if (path === "/logs") {
-    const { LogsAdminPage } = await import("./components/admin/LogsAdminPage.jsx");
+    const { UserLogsPage } = await import("./components/admin/UserLogsPage.jsx");
     root.render(
       <StrictMode>
-        <LogsAdminPage />
+        <UserLogsPage />
+      </StrictMode>
+    );
+    return;
+  }
+
+  if (path === "/admin") {
+    const { AdminPage } = await import("./components/admin/AdminPage.jsx");
+    root.render(
+      <StrictMode>
+        <AdminPage />
       </StrictMode>
     );
     return;

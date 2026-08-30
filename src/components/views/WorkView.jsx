@@ -4,9 +4,11 @@ import { Check, Plus, X, Trash2, Zap } from "../icons";
 import { niceDate } from "../../lib/dates";
 import { useTheme } from "../../theme/ThemeContext";
 import { fontHead, fontBody } from "../../theme/colors";
+import { useActivityLog } from "../../hooks/useActivityLogger";
 
 export function WorkView({ work, setWork, today, ping }) {
   const { T } = useTheme();
+  const { log } = useActivityLog();
   const [taskDraft, setTaskDraft] = useState("");
   const [noteDraft, setNoteDraft] = useState("");
   const [editing, setEditing] = useState(null);
@@ -24,31 +26,44 @@ export function WorkView({ work, setWork, today, ping }) {
       ping("Type a task first");
       return;
     }
+    const text = taskDraft.trim();
     setWork((p) => ({
       ...p,
-      tasks: [{ id: Date.now(), text: taskDraft.trim(), done: false, createdAt: today, pri }, ...(p.tasks || [])],
+      tasks: [{ id: Date.now(), text, done: false, createdAt: today, pri }, ...(p.tasks || [])],
     }));
     setTaskDraft("");
     ping(pri ? "Priority task added ⚡" : "Task added");
+    log("work.task.added", { priority: pri, text });
   };
   const toggleTask = (id) => {
+    const task = tasks.find((t) => t.id === id);
     setWork((p) => ({
       ...p,
       tasks: (p.tasks || []).map((t) =>
         t.id === id ? { ...t, done: !t.done, doneAt: !t.done ? today : null } : t
       ),
     }));
+    log("work.task.toggled", { text: task?.text, done: !task?.done });
   };
   const delTask = (id) => {
     const removed = tasks.find((t) => t.id === id);
     setWork((p) => ({ ...p, tasks: (p.tasks || []).filter((t) => t.id !== id) }));
+    log("work.task.deleted", { text: removed?.text });
     ping("Task deleted", () => setWork((p) => ({ ...p, tasks: [removed, ...(p.tasks || [])] })));
   };
-  const togglePri = (id) =>
+  const togglePri = (id) => {
+    const task = tasks.find((t) => t.id === id);
     setWork((p) => ({ ...p, tasks: (p.tasks || []).map((t) => (t.id === id ? { ...t, pri: !t.pri } : t)) }));
+    log("work.task.priority", { text: task?.text, priority: !task?.pri });
+  };
   const clearOldDone = () => {
+    const removed = tasks.filter((t) => t.done && t.doneAt !== today);
+    if (!removed.length) return;
     setWork((p) => ({ ...p, tasks: (p.tasks || []).filter((t) => !(t.done && t.doneAt !== today)) }));
-    ping("Old completed tasks cleared");
+    log("work.task.cleared_done", { count: removed.length });
+    ping(`Cleared ${removed.length} old task${removed.length === 1 ? "" : "s"}`, () =>
+      setWork((p) => ({ ...p, tasks: [...removed, ...(p.tasks || [])] }))
+    );
   };
 
   const addNote = () => {
@@ -56,18 +71,24 @@ export function WorkView({ work, setWork, today, ping }) {
       ping("Type a note first");
       return;
     }
+    const text = noteDraft.trim();
     setWork((p) => ({
       ...p,
-      notes: [{ id: Date.now(), text: noteDraft.trim(), pinned: false, updatedAt: today }, ...(p.notes || [])],
+      notes: [{ id: Date.now(), text, pinned: false, updatedAt: today }, ...(p.notes || [])],
     }));
     setNoteDraft("");
     ping("Note saved");
+    log("work.note.added", { length: text.length });
   };
-  const togglePin = (id) =>
+  const togglePin = (id) => {
+    const note = wnotes.find((n) => n.id === id);
     setWork((p) => ({ ...p, notes: (p.notes || []).map((n) => (n.id === id ? { ...n, pinned: !n.pinned } : n)) }));
+    log("work.note.pinned", { pinned: !note?.pinned });
+  };
   const delNote = (id) => {
     const removed = wnotes.find((n) => n.id === id);
     setWork((p) => ({ ...p, notes: (p.notes || []).filter((n) => n.id !== id) }));
+    log("work.note.deleted");
     ping("Note deleted", () => setWork((p) => ({ ...p, notes: [removed, ...(p.notes || [])] })));
   };
   const saveEdit = () => {
@@ -78,6 +99,7 @@ export function WorkView({ work, setWork, today, ping }) {
         n.id === editing ? { ...n, text: editText.trim() || n.text, updatedAt: today } : n
       ),
     }));
+    log("work.note.updated", { length: editText.trim().length });
     setEditing(null);
     ping("Note updated");
   };

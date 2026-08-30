@@ -47,6 +47,7 @@ export function WelcomeScreen({ onDone, onRestore, onDemo, title = "Get started"
       onDone({
         name: trimmed,
         pin: hashed,
+        pinPlain: wantPin ? pin : null,
         createdAt: dkey(),
         currency: DEFAULT_CURRENCY,
         budget: 1000,

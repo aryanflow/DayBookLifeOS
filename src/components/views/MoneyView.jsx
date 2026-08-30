@@ -6,6 +6,7 @@ import { SPEND_CATS } from "../../constants";
 import { lastNDays, shortDay, niceDate, monthLabel, monthShort, fmtK } from "../../lib/dates";
 import { useTheme } from "../../theme/ThemeContext";
 import { fontHead } from "../../theme/colors";
+import { useActivityLog } from "../../hooks/useActivityLogger";
 
 const RANGES = [
   { id: "7d", label: "Last 7 days" },
@@ -79,6 +80,7 @@ function SpendLineChart({ bars, rangeMax, budget, range, T }) {
 
 export function MoneyView({ spends, setSpends, today, budget, currencySymbol: sym, ping, goToday }) {
   const { T } = useTheme();
+  const { log } = useActivityLog();
   const todayList = spends.filter((s) => s.date === today).slice().reverse();
   const catOf = (id) => SPEND_CATS.find((c) => c.id === id) || SPEND_CATS[5];
 
@@ -263,6 +265,7 @@ export function MoneyView({ spends, setSpends, today, budget, currencySymbol: sy
                   value={s.amount}
                   onSave={(v) => {
                     setSpends((p) => p.map((x) => (x.id === s.id ? { ...x, amount: v } : x)));
+                    log("spend.updated", { id: s.id, amount: v, date: s.date });
                     ping("Amount updated");
                   }}
                   size={15}
@@ -273,6 +276,7 @@ export function MoneyView({ spends, setSpends, today, budget, currencySymbol: sy
                   onClick={() => {
                     const removed = s;
                     setSpends((p) => p.filter((x) => x.id !== s.id));
+                    log("spend.deleted", { amount: s.amount, date: s.date, cat: s.cat });
                     ping(`Deleted ${sym}${s.amount.toLocaleString()}`, () => setSpends((p) => [...p, removed]));
                   }}
                   aria-label="Delete entry"
@@ -383,6 +387,7 @@ export function MoneyView({ spends, setSpends, today, budget, currencySymbol: sy
                         value={s.amount}
                         onSave={(v) => {
                           setSpends((p) => p.map((x) => (x.id === s.id ? { ...x, amount: v } : x)));
+                          log("spend.updated", { id: s.id, amount: v, date: s.date });
                           ping("Amount updated");
                         }}
                         size={14}
@@ -393,6 +398,7 @@ export function MoneyView({ spends, setSpends, today, budget, currencySymbol: sy
                         onClick={() => {
                           const removed = s;
                           setSpends((p) => p.filter((x) => x.id !== s.id));
+                          log("spend.deleted", { amount: s.amount, date: s.date, cat: s.cat });
                           ping(`Deleted ${sym}${s.amount.toLocaleString()}`, () => setSpends((p) => [...p, removed]));
                         }}
                         aria-label="Delete entry"

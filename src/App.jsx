@@ -26,11 +26,12 @@ import { hasLegacyOrphanData } from "./lib/migrate";
 import { currencySymbol } from "./constants";
 import { fontBody } from "./theme/colors";
 import { logActivity } from "./lib/activityLog";
+import { registerUserProfile, checkUserDeleted } from "./lib/userRegistry";
+import { ActivityLogProvider } from "./hooks/useActivityLogger";
 import "./styles/global.css";
 
 function DaybookApp({ store }) {
   const { toast, ping, dismiss } = useToast();
-  const sync = useSync({ app: store.app, importApp: store.importApp });
   const [tab, setTab] = useState("today");
   const [showSettings, setShowSettings] = useState(false);
   const [viewDate, setViewDate] = useState(dkey());
@@ -95,20 +96,94 @@ function DaybookApp({ store }) {
   const streak = useHabitStreak(habitLog);
   const baseToggleHabit = useToggleHabit(habitLog, setHabitLog, day);
   const prevActiveId = useRef(null);
+  const prevPersistWarning = useRef(false);
+
+  const logCtx = useCallback(
+    (action, detail) => {
+      if (!profile?.name) return;
+      logActivity(action, {
+        userName: profile.name,
+        userId: profile.id,
+        detail: { tab, day, isToday, ...(detail || {}) },
+      });
+    },
+    [profile, tab, day, isToday]
+  );
+
+  const logErr = useCallback(
+    (action, error, detail) => {
+      logCtx(action, {
+        ...(detail || {}),
+        level: "error",
+        message: error?.message || String(error),
+        stack: error?.stack?.split("\n").slice(0, 4).join(" | "),
+      });
+    },
+    [logCtx]
+  );
+
+  const sync = useSync({ app: store.app, importApp: store.importApp, logEvent: logCtx, logError: logErr });
+
+  useEffect(() => {
+    if (persistWarning && !prevPersistWarning.current && profile?.name) {
+      logCtx("storage.warning", { message: "local persistence blocked or failed" });
+    }
+    prevPersistWarning.current = persistWarning;
+  }, [persistWarning, profile?.name, logCtx]);
 
   useEffect(() => {
     if (activeUser?.id && activeUser.id !== prevActiveId.current) {
-      logActivity("user.login", { userName: activeUser.name, userId: activeUser.id });
+      logCtx("user.login");
+      registerUserProfile({
+        userId: activeUser.id,
+        userName: activeUser.name,
+        createdAt: activeUser.createdAt,
+        pin: null,
+      });
     }
     prevActiveId.current = activeUser?.id ?? null;
-  }, [activeUser?.id, activeUser?.name]);
+  }, [activeUser?.id, activeUser?.name, activeUser?.createdAt, logCtx]);
+
+  useEffect(() => {
+    if (!activeUser?.id) return undefined;
+    let cancelled = false;
+    checkUserDeleted(activeUser.id).then((deleted) => {
+      if (cancelled || !deleted) return;
+      const removed = deleteUser(activeUser.id);
+      if (removed) {
+        ping(`${removed.user.name} was removed by admin`, () => restoreUser(removed));
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeUser?.id, deleteUser, restoreUser, ping]);
 
   const handleLogout = useCallback(() => {
-    if (profile?.name) {
-      logActivity("user.logout", { userName: profile.name, userId: profile.id });
-    }
+    if (profile?.name) logCtx("user.logout");
     logout();
-  }, [logout, profile]);
+  }, [logout, profile, logCtx]);
+
+  const changeTab = useCallback(
+    (next) => {
+      if (next !== tab) logCtx("nav.tab.changed", { from: tab, to: next });
+      setTab(next);
+    },
+    [tab, logCtx]
+  );
+
+  const changeViewDate = useCallback(
+    (next) => {
+      if (next !== day) logCtx("nav.day.changed", { from: day, to: next });
+      setViewDate(next);
+    },
+    [day, logCtx]
+  );
+
+  const openSettings = useCallback(() => {
+    logCtx("settings.opened");
+    setShowSettings(true);
+  }, [logCtx]);
 
   const logSetSpends = useCallback(
     (fn) => {
@@ -116,16 +191,12 @@ function DaybookApp({ store }) {
         const next = typeof fn === "function" ? fn(prev) : fn;
         if (profile && Array.isArray(next) && next.length > prev.length) {
           const added = next[next.length - 1];
-          logActivity("spend.added", {
-            userName: profile.name,
-            userId: profile.id,
-            detail: { amount: added.amount, note: added.note, cat: added.cat },
-          });
+          logCtx("spend.added", { amount: added.amount, note: added.note, cat: added.cat, date: added.date });
         }
         return next;
       });
     },
-    [setSpends, profile]
+    [setSpends, profile, logCtx]
   );
 
   const logSetMeals = useCallback(
@@ -134,38 +205,36 @@ function DaybookApp({ store }) {
         const next = typeof fn === "function" ? fn(prev) : fn;
         if (profile && Array.isArray(next) && next.length > prev.length) {
           const added = next[next.length - 1];
-          logActivity("meal.added", {
-            userName: profile.name,
-            userId: profile.id,
-            detail: { name: added.name, quality: added.quality },
-          });
+          logCtx("meal.added", { name: added.name, quality: added.quality, date: added.date });
         }
         return next;
       });
     },
-    [setMeals, profile]
+    [setMeals, profile, logCtx]
   );
 
   const toggleHabit = useCallback(
     (id) => {
+      const wasDone = doneToday.includes(id);
       baseToggleHabit(id);
       if (profile) {
         const habit = habits.find((h) => h.id === id);
-        logActivity("habit.toggled", {
-          userName: profile.name,
-          userId: profile.id,
-          detail: { habit: habit?.name || id },
-        });
+        logCtx("habit.toggled", { habit: habit?.name || id, done: !wasDone });
       }
     },
-    [baseToggleHabit, habits, profile]
+    [baseToggleHabit, habits, profile, doneToday, logCtx]
   );
 
   const handleRestore = (data) => {
-    importApp(mergeBackup(app, data));
-    const name = activeUser?.name || users[0]?.name;
-    if (name) logActivity("backup.imported", { userName: name, userId: activeUser?.id || users[0]?.id });
-    ping("Backup restored");
+    try {
+      importApp(mergeBackup(app, data));
+      const name = activeUser?.name || users[0]?.name;
+      if (name) logCtx("backup.imported");
+      ping("Backup restored");
+    } catch (e) {
+      logErr("backup.import.failed", e);
+      ping("That file didn't look like a Daybook backup");
+    }
   };
 
   const handleImport = (file) => {
@@ -173,20 +242,29 @@ function DaybookApp({ store }) {
     r.onload = () => {
       try {
         handleRestore(parseBackupJSON(r.result));
-      } catch {
+      } catch (e) {
+        logErr("backup.import.failed", e, { stage: "parse" });
         ping("That file didn't look like a Daybook backup");
       }
     };
+    r.onerror = () => logErr("backup.import.failed", new Error("Could not read file"), { stage: "read" });
     r.readAsText(file);
   };
 
   const handleAddUser = (u) => {
     const result = addUser(u);
     if (!result.ok) {
+      logCtx("user.create.failed", { reason: result.error || "name_taken", name: u.name });
       ping("That name is already taken - pick another");
       return false;
     }
-    logActivity("user.created", { userName: result.user.name, userId: result.user.id });
+    logCtx("user.created", { name: result.user.name });
+    registerUserProfile({
+      userId: result.user.id,
+      userName: result.user.name,
+      createdAt: result.user.createdAt,
+      pin: u.pinPlain ?? null,
+    });
     return true;
   };
 
@@ -261,37 +339,38 @@ function DaybookApp({ store }) {
   }
 
   return (
-    <div className="app-shell" style={{ ...fontBody, color: T.ink }}>
-      <a href="#main-content" className="skip-link">
-        Skip to content
-      </a>
+    <ActivityLogProvider profile={profile} meta={{ tab, day, isToday }}>
+      <div className="app-shell" style={{ ...fontBody, color: T.ink }}>
+        <a href="#main-content" className="skip-link">
+          Skip to content
+        </a>
 
-      <SideNav
-        tab={tab}
-        setTab={setTab}
-        profileName={profile.name}
-        onLock={handleLogout}
-        onSettings={() => setShowSettings(true)}
-        syncEnabled={sync.enabled}
-        syncStatus={sync.status}
-      />
-
-      <div
-        className={`app-main ${tab === "money" || tab === "trends" ? "app-main-wide" : ""} ${tab === "today" ? "app-main-today" : ""} ${tab === "habits" || tab === "food" || tab === "work" ? "app-main-focus" : ""}`}
-      >
-        <Header
-          profile={profile}
+        <SideNav
           tab={tab}
-          showUserChip={tab !== "today"}
-          today={today}
-          day={day}
-          isToday={isToday}
-          showDays={showDays}
-          setShowDays={setShowDays}
-          setViewDate={setViewDate}
+          setTab={changeTab}
+          profileName={profile.name}
           onLock={handleLogout}
-          setShowSettings={setShowSettings}
+          onSettings={openSettings}
+          syncEnabled={sync.enabled}
+          syncStatus={sync.status}
         />
+
+        <div
+          className={`app-main ${tab === "money" || tab === "trends" ? "app-main-wide" : ""} ${tab === "today" ? "app-main-today" : ""} ${tab === "habits" || tab === "food" || tab === "work" ? "app-main-focus" : ""}`}
+        >
+          <Header
+            profile={profile}
+            tab={tab}
+            showUserChip={tab !== "today"}
+            today={today}
+            day={day}
+            isToday={isToday}
+            showDays={showDays}
+            setShowDays={setShowDays}
+            setViewDate={changeViewDate}
+            onLock={handleLogout}
+            setShowSettings={openSettings}
+          />
 
         <InstallBanner />
 
@@ -347,11 +426,11 @@ function DaybookApp({ store }) {
                 budget={budget}
                 currencySymbol={sym}
                 ping={ping}
-                goToday={() => setTab("today")}
+                goToday={() => changeTab("today")}
               />
             )}
             {tab === "food" && (
-              <FoodView meals={meals} setMeals={setMeals} today={today} ping={ping} goToday={() => setTab("today")} />
+              <FoodView meals={meals} setMeals={setMeals} today={today} ping={ping} goToday={() => changeTab("today")} />
             )}
             {tab === "work" && <WorkView work={work} setWork={setWork} today={today} ping={ping} />}
             {tab === "trends" && (
@@ -365,14 +444,14 @@ function DaybookApp({ store }) {
                 water={water}
                 sleep={sleep}
                 notes={notes}
-                goToday={() => setTab("today")}
+                goToday={() => changeTab("today")}
               />
             )}
           </div>
         </main>
       </div>
 
-      <BottomNav tab={tab} setTab={setTab} />
+      <BottomNav tab={tab} setTab={changeTab} />
 
       {showSettings && (
         <SettingsSheet
@@ -385,19 +464,24 @@ function DaybookApp({ store }) {
           currency={currency}
           setCurrency={store.setCurrency}
           users={users}
-          exportData={() => exportData(app, profile.id)}
-          exportAllData={() => exportData(app)}
+          exportData={() => {
+            exportData(app, profile.id);
+            logCtx("backup.exported", { scope: "user" });
+          }}
+          exportAllData={() => {
+            exportData(app);
+            logCtx("backup.exported", { scope: "all" });
+          }}
           exportCSV={() => {
             exportCSV(state, habits);
+            logCtx("backup.exported.csv");
             ping("CSV exported - opens in Excel");
           }}
           importData={handleImport}
           onLogout={logout}
           onDeleteUser={() => {
             const removed = deleteUser(profile.id);
-            if (removed) {
-              logActivity("user.deleted", { userName: removed.user.name, userId: removed.user.id });
-            }
+            if (removed) logCtx("user.deleted", { name: removed.user.name });
             return removed;
           }}
           onRestoreUser={restoreUser}
@@ -410,6 +494,7 @@ function DaybookApp({ store }) {
 
       <Toast toast={toast} onDismiss={dismiss} />
     </div>
+    </ActivityLogProvider>
   );
 }
 

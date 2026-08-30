@@ -4,9 +4,11 @@ import { MEAL_QUALITY } from "../../constants";
 import { lastNDays } from "../../lib/dates";
 import { useTheme } from "../../theme/ThemeContext";
 import { fontHead } from "../../theme/colors";
+import { useActivityLog } from "../../hooks/useActivityLogger";
 
 export function FoodView({ meals, setMeals, today, ping, goToday }) {
   const { T } = useTheme();
+  const { log } = useActivityLog();
   const days = lastNDays(7);
   const week = meals.filter((m) => days.includes(m.date));
   const counts = MEAL_QUALITY.map((q) => week.filter((m) => m.quality === q.id).length);
@@ -84,7 +86,12 @@ export function FoodView({ meals, setMeals, today, ping, goToday }) {
                 </span>
                 <button
                   type="button"
-                  onClick={() => setMeals((p) => p.filter((x) => x.id !== m.id))}
+                  onClick={() => {
+                    const removed = m;
+                    setMeals((p) => p.filter((x) => x.id !== m.id));
+                    log("meal.deleted", { name: m.name, date: m.date, quality: m.quality });
+                    ping(`Removed ${m.name}`, () => setMeals((p) => [...p, removed]));
+                  }}
                   aria-label="Delete meal"
                   style={{ background: "none", border: "none", color: T.dim, cursor: "pointer", padding: 2 }}
                 >

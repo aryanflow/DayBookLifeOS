@@ -9,11 +9,11 @@ import {
 } from "../lib/syncConfig";
 import { hashSyncId } from "../lib/syncCrypto";
 import { encryptAndPush, fetchRemote, isSyncAvailable, pullAndDecrypt } from "../lib/sync";
-import { logActivity } from "../lib/activityLog";
+import { registerUserProfile } from "../lib/userRegistry";
 
 const PUSH_DELAY_MS = 2500;
 
-export function useSync({ app, importApp }) {
+export function useSync({ app, importApp, logEvent, logError }) {
   const [config, setConfigState] = useState(() => loadSyncConfig());
   const [status, setStatus] = useState("idle");
   const [lastError, setLastError] = useState("");
@@ -84,6 +84,7 @@ export function useSync({ app, importApp }) {
             };
             setConfig(next);
             setStatus("synced");
+            logEvent?.("sync.pulled", { conflict: true });
             return { ok: true, pulled: true };
           }
         }
@@ -95,16 +96,18 @@ export function useSync({ app, importApp }) {
         };
         setConfig(next);
         setStatus("synced");
+        logEvent?.("sync.pushed", { pulled: false });
         return { ok: true, pulled: false };
       } catch (e) {
         setStatus(navigator.onLine ? "error" : "offline");
         setLastError(e.message || "Sync failed");
+        logError?.("sync.failed", e, { phase: "push" });
         return { ok: false, reason: e.message };
       } finally {
         syncing.current = false;
       }
     },
-    [app, applyRemote, config, setConfig]
+    [app, applyRemote, config, setConfig, logEvent, logError]
   );
 
   const pullNow = useCallback(
@@ -136,16 +139,18 @@ export function useSync({ app, importApp }) {
         };
         setConfig(next);
         setStatus("synced");
+        logEvent?.("sync.pulled", { empty: false });
         return { ok: true, pulled: true };
       } catch (e) {
         setStatus(navigator.onLine ? "error" : "offline");
         setLastError(e.message || "Sync failed");
+        logError?.("sync.failed", e, { phase: "pull" });
         return { ok: false, reason: e.message };
       } finally {
         syncing.current = false;
       }
     },
-    [applyRemote, config, setConfig]
+    [applyRemote, config, setConfig, logEvent, logError]
   );
 
   const syncNow = useCallback(async () => {
@@ -203,12 +208,18 @@ export function useSync({ app, importApp }) {
     next.lastSyncedAt = new Date().toISOString();
     setConfig(next);
     setStatus("synced");
+    logEvent?.("sync.enabled");
     const active = app.users.find((u) => u.id === app.activeUserId);
     if (active) {
-      logActivity("sync.enabled", { userName: active.name, userId: active.id });
+      registerUserProfile({
+        userId: active.id,
+        userName: active.name,
+        createdAt: active.createdAt,
+        syncId,
+      });
     }
     return { ok: true, syncKey };
-  }, [app, setConfig]);
+  }, [app, setConfig, logEvent]);
 
   const linkDevice = useCallback(
     async (rawKey) => {
@@ -241,24 +252,23 @@ export function useSync({ app, importApp }) {
         };
         setConfig(next);
         setStatus("synced");
-        const active = app.users.find((u) => u.id === app.activeUserId);
-        if (active) {
-          logActivity("sync.linked", { userName: active.name, userId: active.id });
-        }
+        logEvent?.("sync.linked");
         return { ok: true };
       } catch (e) {
         setStatus("error");
+        logError?.("sync.failed", e, { phase: "link" });
         return { ok: false, reason: e.message || "Could not link - check your sync code" };
       }
     },
-    [applyRemote, setConfig]
+    [applyRemote, setConfig, logEvent, logError]
   );
 
   const disableSync = useCallback(() => {
     setConfig(null);
     setStatus("idle");
     setLastError("");
-  }, [setConfig]);
+    logEvent?.("sync.disabled");
+  }, [setConfig, logEvent]);
 
   return {
     available: isSyncAvailable(),

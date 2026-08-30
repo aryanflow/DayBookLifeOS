@@ -201,6 +201,19 @@ button.card:hover {
   width: 100%;
 }
 
+/* Mobile: match Today’s card rhythm (other tabs used raw fragments with no gap) */
+.view-habits,
+.view-food,
+.view-work,
+.view-money,
+.view-trends {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+}
+
 .chip-row {
   display: flex;
   flex-wrap: wrap;
@@ -212,6 +225,10 @@ button.card:hover {
 .chip-row .chip {
   flex: 0 1 auto;
   min-width: 0;
+}
+
+.day-strip-scroll {
+  overscroll-behavior-x: contain;
 }
 
 .settings-backdrop {
@@ -323,6 +340,12 @@ body.modal-open .app-main {
   background: var(--db-workSoft);
   color: var(--db-work);
   border-color: color-mix(in srgb, var(--db-work) 28%, transparent);
+}
+
+.habit-emoji-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .habit-row {
