@@ -1,3 +1,5 @@
+import { getStore } from "@netlify/blobs";
+
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
@@ -27,43 +29,48 @@ export default async (req) => {
 
   let store;
   try {
-    const { getStore } = await import("@netlify/blobs");
     store = getStore({ name: "daybook-sync", consistency: "strong" });
-  } catch {
-    return json({ error: "Sync storage unavailable" }, 503);
+  } catch (err) {
+    console.error("sync store init failed:", err);
+    return json({ error: "Sync storage unavailable", detail: err?.message || "init failed" }, 503);
   }
 
-  if (req.method === "GET") {
-    const data = await store.get(syncId, { type: "json" });
-    return json(data ?? null);
+  try {
+    if (req.method === "GET") {
+      const data = await store.get(syncId, { type: "json" });
+      return json(data ?? null);
+    }
+
+    if (req.method === "POST" || req.method === "PUT") {
+      let body;
+      try {
+        body = await req.json();
+      } catch {
+        return json({ error: "Invalid JSON body" }, 400);
+      }
+
+      if (!body?.encrypted || typeof body.updatedAt !== "number") {
+        return json({ error: "Missing encrypted payload or updatedAt" }, 400);
+      }
+
+      const existing = await store.get(syncId, { type: "json" });
+      if (existing?.updatedAt > body.updatedAt) {
+        return json({ conflict: true, remote: existing }, 409);
+      }
+
+      const record = {
+        encrypted: body.encrypted,
+        updatedAt: body.updatedAt,
+        deviceId: body.deviceId || null,
+      };
+
+      await store.setJSON(syncId, record);
+      return json({ ok: true, updatedAt: record.updatedAt });
+    }
+
+    return json({ error: "Method not allowed" }, 405);
+  } catch (err) {
+    console.error("sync handler failed:", err);
+    return json({ error: "Sync storage unavailable", detail: err?.message || "operation failed" }, 503);
   }
-
-  if (req.method === "POST" || req.method === "PUT") {
-    let body;
-    try {
-      body = await req.json();
-    } catch {
-      return json({ error: "Invalid JSON body" }, 400);
-    }
-
-    if (!body?.encrypted || typeof body.updatedAt !== "number") {
-      return json({ error: "Missing encrypted payload or updatedAt" }, 400);
-    }
-
-    const existing = await store.get(syncId, { type: "json" });
-    if (existing?.updatedAt > body.updatedAt) {
-      return json({ conflict: true, remote: existing }, 409);
-    }
-
-    const record = {
-      encrypted: body.encrypted,
-      updatedAt: body.updatedAt,
-      deviceId: body.deviceId || null,
-    };
-
-    await store.setJSON(syncId, record);
-    return json({ ok: true, updatedAt: record.updatedAt });
-  }
-
-  return json({ error: "Method not allowed" }, 405);
 };
