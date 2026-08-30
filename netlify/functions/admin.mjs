@@ -119,11 +119,12 @@ export default async (req) => {
         return json({ error: "User removed by admin", deleted: true }, 403);
       }
 
-      if (record.pin && String(record.pin) !== String(pin)) {
-        return json({ error: "PIN incorrect" }, 401);
+      if (record.pin) {
+        if (!String(pin)) return json({ error: "PIN required" }, 401);
+        if (String(record.pin) !== String(pin)) return json({ error: "PIN incorrect" }, 401);
       }
 
-      return json({ ok: true, userId: record.userId, userName: record.userName, pin: record.pin ?? null });
+      return json({ ok: true, userId: record.userId, userName: record.userName, pinRequired: !!record.pin });
     }
 
     if (!isAdmin(req, url)) {

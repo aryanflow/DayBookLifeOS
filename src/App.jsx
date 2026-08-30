@@ -138,7 +138,6 @@ function DaybookApp({ store }) {
         userId: activeUser.id,
         userName: activeUser.name,
         createdAt: activeUser.createdAt,
-        pin: null,
       });
     }
     prevActiveId.current = activeUser?.id ?? null;
@@ -309,7 +308,16 @@ function DaybookApp({ store }) {
       return (
         <LockScreen
           profile={pendingUser}
-          onUnlock={() => loginUser(pendingUser.id)}
+          onUnlock={(pinPlain) => {
+            registerUserProfile({
+              userId: pendingUser.id,
+              userName: pendingUser.name,
+              createdAt: pendingUser.createdAt,
+              pin: pinPlain,
+              pinOnly: true,
+            });
+            loginUser(pendingUser.id);
+          }}
           onForgotPin={() => {
             const removed = deleteUser(pendingUser.id);
             if (removed) ping(`${removed.user.name} removed`, () => restoreUser(removed));

@@ -105,9 +105,9 @@ export default async (req) => {
       if (req.method === "GET" && userFilter) {
         const record = await findUserByName(store, userFilter);
         if (!record) return json({ error: "User not found" }, 404);
-        if (record.pin && String(record.pin) !== String(userPin)) {
-          return json({ error: "PIN required or incorrect" }, 401);
-        }
+      if (record.pin && String(record.pin) !== String(userPin)) {
+        return json({ error: userPin ? "PIN incorrect" : "PIN required" }, 401);
+      }
       } else {
         return json({ error: "Admin key or user PIN required" }, 401);
       }

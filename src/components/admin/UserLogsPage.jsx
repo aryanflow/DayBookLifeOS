@@ -40,7 +40,10 @@ function UserLogsInner() {
     setError("");
     try {
       const verified = await verifyUserAccess({ userName: name, pin });
-      const sess = { userName: verified.userName, pin, registryPin: verified.pin };
+      if (verified.pinRequired && !pin) {
+        throw new Error("PIN required for this profile");
+      }
+      const sess = { userName: verified.userName, pin };
       setSession(sess);
       const data = await fetchLogs({ user: verified.userName, pin, limit: 300 });
       setEvents(data.events || []);
@@ -87,7 +90,6 @@ function UserLogsInner() {
             <h1 style={{ ...fontHead, fontSize: 22, fontWeight: 800, marginBottom: 4 }}>{session.userName}&apos;s activity</h1>
             <p style={{ color: T.inkSoft, fontSize: 13 }}>
               {events.length} recent events · {total} total stored
-              {session.registryPin ? ` · PIN: ${session.registryPin}` : " · No PIN on file"}
             </p>
           </div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>

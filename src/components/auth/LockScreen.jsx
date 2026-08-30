@@ -34,7 +34,7 @@ export function LockScreen({ profile, onUnlock, onForgotPin, onBack }) {
         const next = entry + d;
         if (next.length === 4) {
           verifyPin(next, profile.pin).then((ok) => {
-            if (ok) setTimeout(onUnlock, 120);
+            if (ok) setTimeout(() => onUnlock(next), 120);
             else {
               setWrong(true);
               setTries((t) => {

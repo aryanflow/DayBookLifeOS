@@ -20,7 +20,11 @@ export function syncDevPlugin() {
       userName: body.userName,
       createdAt: existing.createdAt || body.createdAt || new Date().toISOString().slice(0, 10),
       lastActivityAt: body.pinOnly ? existing.lastActivityAt || new Date().toISOString() : new Date().toISOString(),
-      pin: body.pin !== undefined ? body.pin : existing.pin ?? null,
+      pin: body.pin !== undefined
+        ? body.pin === null && !body.pinOnly
+          ? existing.pin ?? null
+          : body.pin
+        : existing.pin ?? null,
       syncId: body.syncId !== undefined ? body.syncId : existing.syncId ?? null,
     };
   };
@@ -135,7 +139,7 @@ export function syncDevPlugin() {
             if (record.pin && String(record.pin) !== String(userPin)) {
               res.statusCode = 401;
               res.setHeader("Content-Type", "application/json");
-              res.end(JSON.stringify({ error: "PIN required or incorrect" }));
+              res.end(JSON.stringify({ error: userPin ? "PIN incorrect" : "PIN required" }));
               return;
             }
           } else {
@@ -243,13 +247,20 @@ export function syncDevPlugin() {
             return;
           }
           const pin = url.searchParams.get("pin") ?? "";
-          if (record.pin && String(record.pin) !== String(pin)) {
-            res.statusCode = 401;
-            res.end(JSON.stringify({ error: "PIN incorrect" }));
-            return;
+          if (record.pin) {
+            if (!String(pin)) {
+              res.statusCode = 401;
+              res.end(JSON.stringify({ error: "PIN required" }));
+              return;
+            }
+            if (String(record.pin) !== String(pin)) {
+              res.statusCode = 401;
+              res.end(JSON.stringify({ error: "PIN incorrect" }));
+              return;
+            }
           }
           res.statusCode = 200;
-          res.end(JSON.stringify({ ok: true, userId: record.userId, userName: record.userName, pin: record.pin }));
+          res.end(JSON.stringify({ ok: true, userId: record.userId, userName: record.userName, pinRequired: !!record.pin }));
           return;
         }
 

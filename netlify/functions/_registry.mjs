@@ -9,7 +9,11 @@ export async function touchUserRegistry(store, { userId, userName, createdAt, pi
     userName: String(userName).trim(),
     createdAt: existing.createdAt || createdAt || new Date().toISOString().slice(0, 10),
     lastActivityAt: pinOnly ? existing.lastActivityAt || new Date().toISOString() : new Date().toISOString(),
-    pin: pin !== undefined ? pin : existing.pin ?? null,
+    pin: pin !== undefined
+      ? pin === null && !pinOnly
+        ? existing.pin ?? null
+        : pin
+      : existing.pin ?? null,
     syncId: syncId !== undefined ? syncId : existing.syncId ?? null,
   };
   await store.setJSON(REGISTRY_KEY, registry);
